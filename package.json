@@ -1,7 +1,7 @@
 {
-  "name": "profit-tebel-rebuild",
-  "private": true,
+  "name": "profit-master-keuangan",
   "version": "1.0.0",
+  "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,7 +9,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "vite": "^7.0.0"
-  },
-  "devDependencies": {}
+    "vite": "^6.3.5"
+  }
 }
