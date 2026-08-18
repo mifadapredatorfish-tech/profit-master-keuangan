@@ -1,134 +1,400 @@
 import * as XLSX from "xlsx";
 import "./style.css";
 
-const NAV=[
- ["dashboard","Dashboard Profit"],["produk","Master Produk"],["iklan","Detail Iklan"],
- ["roas","Kalkulator ROAS"],["operasional","Biaya Operasional"],["upload","Upload Data"]
-];
-const DB="pt_lite";const KEY="kv";const STORES="pt_lite_stores";const ACTIVE="pt_lite_active";
-const empty=()=>({income:null,ordersAll:[],ads:[],adsProduct:[]});
-const blank=()=>({data:empty(),hpp:{},hppHist:{},hppMeta:{},opCosts:[]});
-let S=blank(),stores=[{id:"default",name:"Toko Utama",platform:"shopee"}],active="default",dbp;
-
-const esc=x=>String(x??"").replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
-const rp=n=>"Rp "+Math.round(Number(n)||0).toLocaleString("id-ID");
-const norm=x=>String(x??"").replace(/\s+/g," ").trim().toLowerCase();
-const num=x=>{if(x==null||x===""||x==="-")return 0;if(typeof x==="number")return Number.isFinite(x)?x:0;let s=String(x).replace(/[Rp%\s]/g,"").replace(/\./g,"").replace(",","."),n=parseFloat(s);return Number.isFinite(n)?n:0};
-const date=x=>{
- if(x==null||x==="")return null;if(x instanceof Date)return isNaN(x)?null:x.toISOString().slice(0,10);
- if(typeof x==="number"&&Number.isFinite(x)){let d=new Date(Date.UTC(1899,11,30)+x*864e5);return isNaN(d)?null:d.toISOString().slice(0,10)}
- let s=String(x).trim().split(/[ T]/)[0],m=s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
- if(m)return `${m[1]}-${String(m[2]).padStart(2,"0")}-${String(m[3]).padStart(2,"0")}`;
- m=s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);return m?`${m[3]}-${String(m[2]).padStart(2,"0")}-${String(m[1]).padStart(2,"0")}`:null
+const I={
+shop:'<svg viewBox="0 0 24 24"><path d="M4 10v9h16v-9"/><path d="M3 10h18l-2-6H5l-2 6Z"/><path d="M8 19v-5h8v5"/></svg>',
+grid:'<svg viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>',
+box:'<svg viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z"/><path d="m4 7.5 8 4 8-4M12 11.5V21"/></svg>',
+ad:'<svg viewBox="0 0 24 24"><path d="m4 10 12-5v14L4 14v-4Z"/><path d="M16 9h4v6h-4"/></svg>',
+calc:'<svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h2M14 11h2M8 15h2M14 15h2M8 18h2M14 18h2"/></svg>',
+wallet:'<svg viewBox="0 0 24 24"><path d="M4 7h15a1 1 0 0 1 1 1v11H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h13"/><path d="M16 13h4"/></svg>',
+upload:'<svg viewBox="0 0 24 24"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M5 14v5h14v-5"/></svg>',
+file:'<svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v5h5M9 12h6M9 16h6"/></svg>',
+check:'<svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg>',
+chev:'<svg viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></svg>',
+search:'<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>'
 };
-const idx=(h,n)=>h.findIndex(x=>norm(x)===norm(n));
-const ix=(h,...ns)=>{for(const n of ns){let i=idx(h,n);if(i!==-1)return i}return -1};
-const sum=(h,r,...ns)=>ns.reduce((a,n)=>{let i=ix(h,n);return a+(i<0?0:num(r[i]))},0);
 
-function db(){if(dbp)return dbp;dbp=new Promise(res=>{if(!indexedDB){res(null);return}let q=indexedDB.open(DB,1);q.onupgradeneeded=()=>q.result.createObjectStore(KEY);q.onsuccess=()=>res(q.result);q.onerror=()=>res(null)});return dbp}
-async function get(k){let d=await db();if(!d)return JSON.parse(localStorage.getItem(k)||"null");return new Promise(r=>{let q=d.transaction(KEY,"readonly").objectStore(KEY).get(k);q.onsuccess=()=>r(q.result??null);q.onerror=()=>r(null)})}
-async function put(k,v){localStorage.setItem(k,JSON.stringify(v));let d=await db();if(!d)return;await new Promise(r=>{let t=d.transaction(KEY,"readwrite");t.objectStore(KEY).put(v,k);t.oncomplete=r;t.onerror=r})}
-const sk=()=>`pt_lite_data_v3_${active}`;
-async function save(){await put(sk(),S);await put(STORES,stores);await put(ACTIVE,active)}
-async function load(){let a=await get(STORES);if(Array.isArray(a)&&a.length)stores=a;active=await get(ACTIVE)||active;let s=await get(sk());S=s?{...blank(),...s,data:{...empty(),...(s.data||{})}}:blank();if(!s)await save()}
+const NAV=[
+["dashboard","Dashboard Profit","grid"],
+["produk","Master Produk","box"],
+["iklan","Detail Iklan","ad"],
+["roas","Kalkulator ROAS","calc"],
+["operasional","Biaya Operasional","wallet"],
+["upload","Upload Data","upload"]
+];
 
-function parseIncome(wb){
- const names=[...wb.SheetNames.filter(n=>/penghasilan|income/i.test(n)&&!/fee|summary|ringkasan/i.test(n)),...wb.SheetNames];
- let rows,si,hi=-1;
- for(const n of names){let a=XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:null,raw:false});for(let i=0;i<Math.min(15,a.length);i++){let z=new Set((a[i]||[]).map(norm));if(z.has("no. pesanan")&&z.has("waktu pesanan dibuat")){rows=a;si=n;hi=i;break}}if(rows)break}
- if(!rows)throw Error(`Sheet penghasilan tidak ditemukan. Sheet: ${wb.SheetNames.join(", ")}`);
- const h=(rows[hi]||[]).map(x=>String(x??"").trim()),c=n=>ix(h,n),out=[],ops=[];let min=null,max=null;
- for(let i=hi+1;i<rows.length;i++){let r=rows[i];if(!r)continue;let id=c("No. Pesanan")<0?"":String(r[c("No. Pesanan")]??"").trim();if(!id)continue;
-  let view=c("Lihat berdasarkan")>=0?norm(r[c("Lihat berdasarkan")]):"";
-  if(view==="sku"||view==="produk"){let pid=c("ID Produk")>=0?String(r[c("ID Produk")]??"").replace(/[,.\s]/g,"").trim():"";if(pid&&pid!=="-")ops.push({order_number:id,marketplace_product_id:pid,product_name:c("Nama Produk")>=0?String(r[c("Nama Produk")]??"").trim():null});continue}
-  if(view&&view!=="order"&&view!=="pesanan")continue;
-  let d=c("Waktu Pesanan Dibuat")>=0?date(r[c("Waktu Pesanan Dibuat")]):null;if(d){min=!min||d<min?d:min;max=!max||d>max?d:max}
-  out.push({
-   order_number:id,order_date:d,release_date:c("Tanggal Dana Dilepaskan")>=0?date(r[c("Tanggal Dana Dilepaskan")]):null,
-   buyer_username:c("Username (Pembeli)")>=0?String(r[c("Username (Pembeli)")]??"").trim():null,
-   payment_method:c("Metode pembayaran pembeli")>=0?String(r[c("Metode pembayaran pembeli")]??"").trim():null,
-   original_price:sum(h,r,"Harga Produk","Harga Asli Produk"),product_discount:Math.abs(sum(h,r,"Total Diskon Produk")),
-   refund_amount:Math.abs(sum(h,r,"Jumlah Pengembalian Dana ke Pembeli")),
-   seller_voucher:Math.abs(sum(h,r,"Voucher disponsor oleh Penjual")),
-   seller_voucher_cofund:Math.abs(sum(h,r,"Voucher co-fund disponsor oleh Penjual")),
-   seller_cashback:Math.abs(sum(h,r,"Cashback Koin disponsori Penjual","Cashback Koin Co-fund disponsori Penjual")),
-   seller_free_shipping_promo:Math.abs(sum(h,r,"Promo Gratis Ongkir dari Penjual")),
-   buyer_shipping_fee:Math.abs(sum(h,r,"Ongkir Dibayar Pembeli")),shopee_shipping_subsidy:Math.abs(sum(h,r,"Gratis Ongkir dari Shopee")),
-   actual_shipping_cost:Math.abs(sum(h,r,"Ongkos Kirim yang Dibayarkan ke Jasa Kirim","Ongkir yang Diteruskan oleh Shopee ke Jasa Kirim")),
-   return_shipping_cost:Math.abs(sum(h,r,"Ongkos Kirim Pengembalian Barang")),
-   ams_commission:Math.abs(sum(h,r,"Biaya Komisi AMS","AMS Service Fee")),admin_fee:Math.abs(sum(h,r,"Biaya Administrasi")),
-   service_fee:Math.abs(sum(h,r,"Biaya Layanan")),processing_fee:Math.abs(sum(h,r,"Biaya Proses Pesanan")),
-   premium_fee:Math.abs(sum(h,r,"Premi")),shipping_program_fee:Math.abs(sum(h,r,"Biaya Program Hemat Biaya Kirim","Biaya Gratis Ongkir XTRA")),
-   transaction_fee:Math.abs(sum(h,r,"Biaya Transaksi")),campaign_fee:Math.abs(sum(h,r,"Biaya Kampanye")),
-   other_fee:Math.abs(sum(h,r,"Biaya Lainnya","FBS Fee","Return to Seller Fee","Biaya Isi Saldo Otomatis (dari Penghasilan)")),
-   pph22:Math.abs(sum(h,r,"PPh 22")),total_income:c("Total Penghasilan")>=0?num(r[c("Total Penghasilan")]):0
-  })
- }
- if(!out.length)throw Error(`Tidak ada baris pesanan yang terbaca dari sheet "${si}".`);
- return {orders:out,orderProducts:ops,periodStart:min,periodEnd:max}
+const TYPES={
+income:{title:"Income (sudah dilepas)",accept:".xlsx,.xls,.csv",ext:"Upload .xlsx",icon:"file"},
+orders:{title:"Order.all",accept:".xlsx,.xls,.csv",ext:"Upload .xlsx",icon:"box"},
+ads:{title:"Iklan Keseluruhan",accept:".csv,.xlsx,.xls",ext:"Upload .csv",icon:"ad"},
+adsProduct:{title:"Iklan per Produk",accept:".csv,.xlsx,.xls",ext:"Upload .csv",icon:"file"}
+};
+
+const STORE_KEY="pt_lite_stores";
+const ACTIVE_KEY="pt_lite_active";
+const PREFIX="pt_lite_";
+const DB_NAME="pt_lite";
+const DB_STORE="kv";
+
+const emptyData=()=>({
+  income:[], orders:[], orderProducts:[], ads:[], adsProduct:[]
+});
+const blank=()=>({
+  files:{}, data:emptyData(), hpp:[], hppHistory:[], hppMeta:{}, opCosts:[], skuStore:{}
+});
+
+let S=blank();
+let activeStoreId="default";
+let dbPromise=null;
+
+function clone(x){return structuredClone(x)}
+function esc(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
+function norm(s){return String(s??"").toLowerCase().replace(/[\s_.:()/\-]+/g,"")}
+function num(v){
+  if(typeof v==="number") return Number.isFinite(v)?v:0;
+  let s=String(v??"").trim().replace(/[^\d,.-]/g,"");
+  if(!s)return 0;
+  if(s.includes(",")&&s.includes(".")) s=s.lastIndexOf(",")>s.lastIndexOf(".")?s.replace(/\./g,"").replace(",","."):s.replace(/,/g,"");
+  else if(s.includes(",")&&!s.includes(".")) s=s.replace(",",".");
+  return Number(s)||0;
 }
-function parseOrders(wb){
- const ws=wb.Sheets.orders||wb.Sheets[wb.SheetNames[0]];if(!ws)throw Error("Sheet orders tidak ditemukan.");
- const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:false}),h=(rows[0]||[]).map(x=>String(x??"").trim()),c=n=>idx(h,n);
- if(c("No. Pesanan")<0)throw Error('Kolom "No. Pesanan" tidak ada. Pastikan ini file Order.all Shopee.');
- const m=new Map();
- for(let i=1;i<rows.length;i++){let r=rows[i];if(!r)continue;let id=String(r[c("No. Pesanan")]??"").trim();if(!id||id==="-")continue;
-  if(!m.has(id))m.set(id,{order_number:id,status_pesanan:c("Status Pesanan")>=0?String(r[c("Status Pesanan")]??"").trim():null,cancel_reason:c("Alasan Pembatalan")>=0?String(r[c("Alasan Pembatalan")]??"").trim():null,return_status:c("Status Pembatalan/ Pengembalian")>=0?String(r[c("Status Pembatalan/ Pengembalian")]??"").trim():null,payment_method:c("Metode Pembayaran")>=0?String(r[c("Metode Pembayaran")]??"").trim():null,order_date:c("Waktu Pesanan Dibuat")>=0?date(r[c("Waktu Pesanan Dibuat")]):null,total_pembayaran:c("Total Pembayaran")>=0?num(r[c("Total Pembayaran")]):0,products:[]});
-  m.get(id).products.push({sku:c("Nomor Referensi SKU")>=0?String(r[c("Nomor Referensi SKU")]??"").trim()||null:null,product_name:c("Nama Produk")>=0?String(r[c("Nama Produk")]??"").trim()||null:null,variation:c("Nama Variasi")>=0?String(r[c("Nama Variasi")]??"").trim()||null:null,quantity:c("Jumlah")>=0?Math.max(1,parseInt(r[c("Jumlah")],10)||1):1,returned_quantity:c("Returned quantity")>=0?Math.max(0,parseInt(r[c("Returned quantity")],10)||0):0,harga_awal:c("Harga Awal")>=0?num(r[c("Harga Awal")]):0,harga_setelah_diskon:c("Harga Setelah Diskon")>=0?num(r[c("Harga Setelah Diskon")]):0})
- }
- let orders=[...m.values()];if(!orders.length)throw Error("Tidak ada pesanan di Order.all.");return {orders}
+function money(n){return new Intl.NumberFormat("id-ID",{style:"currency",currency:"IDR",maximumFractionDigits:0}).format(Number(n)||0)}
+function findKey(row,patterns){
+  const ks=Object.keys(row||{});
+  return ks.find(k=>patterns.some(p=>norm(k).includes(norm(p))));
 }
-function parseAds(text){
- const lines=text.split(/\r?\n/).map(x=>x.split(",").map(v=>v.replace(/^"|"$/g,"")));
- const hi=lines.findIndex(r=>r.some(x=>norm(x)==="urutan")||r.some(x=>norm(x)==="kode produk"&&norm(x).includes("kode")));
- if(hi<0)return [];
- const h=lines[hi].map(String),find=(...ns)=>ix(h,...ns),out=[];
- for(let i=hi+1;i<lines.length;i++){let r=lines[i];if(!r||r.every(x=>!String(x).trim()))continue;let code=find("Kode Produk")>=0?String(r[find("Kode Produk")]??"").trim():null,sp=find("Biaya")>=0?num(r[find("Biaya")]):0;if(code||sp)out.push({product_code:code,product_name:find("Nama Produk")>=0?r[find("Nama Produk")]:null,ad_spend:sp,gmv:find("Omzet Penjualan")>=0?num(r[find("Omzet Penjualan")]):0,direct_gmv:find("Penjualan langsung (GMV langsung)")>=0?num(r[find("Penjualan langsung (GMV langsung)")]):0,periodStart:null})}
- return out
+function val(row,patterns){const k=findKey(row,patterns);return k?row[k]:""}
+function orderId(r){return String(val(r,["no pesanan","nomor pesanan","order id","orderid","order number","no order","id pesanan"])||"").trim()}
+function productName(r){return String(val(r,["nama produk","product name","nama barang","product","produk"])||"").trim()}
+function variation(r){return String(val(r,["nama variasi","variasi","variation","variation name"])||"").trim()}
+function sku(r){return String(val(r,["sku","seller sku","sku penjual","kode produk","product code","item sku"])||"").trim()}
+function marketplaceProductId(r){return String(val(r,["marketplace product id","product id","item id","id produk"])||"").trim()}
+function qty(r){return num(val(r,["jumlah","qty","quantity","kuantitas","jumlah produk"]))||1}
+function returnedQty(r){return num(val(r,["jumlah retur","qty retur","returned qty","return quantity","quantity returned"]))}
+function dateValue(r){
+  const v=val(r,["waktu pesanan","tanggal pesanan","order date","created time","waktu","tanggal"]);
+  if(v instanceof Date)return v;
+  const d=new Date(v);
+  return Number.isNaN(d.getTime())?null:d;
 }
-function mergeBy(old,neu,key){let m=new Map((old||[]).map(x=>[key(x),x]));for(const x of neu)m.set(key(x),x);return [...m.values()]}
-async function upload(kind,file){
- let buf=await file.arrayBuffer();
- if(kind==="ads"||kind==="adsProduct"){let rows=parseAds(new TextDecoder().decode(buf));S.data[kind]=rows;await save();render(`Iklan dimuat: ${rows.length} baris.`);return}
- let wb=XLSX.read(buf,{type:"array",cellDates:true});
- if(kind==="income"){let p=parseIncome(wb);S.data.income=mergeBy(S.data.income,p.orders,x=>x.order_number);S.data.orderProducts=mergeBy(S.data.orderProducts,p.orderProducts,x=>`${x.order_number}|${x.marketplace_product_id}`)}
- if(kind==="orders"){let p=parseOrders(wb);S.data.ordersAll=mergeBy(S.data.ordersAll,p.orders,x=>x.order_number)}
- await save();render(`${kind==="income"?"Income":"Order.all"} dimuat. Data lama tidak dihapus; transaksi digabung berdasarkan No. Pesanan.`)
+function dateKey(v){
+  const d=v instanceof Date?v:new Date(v);
+  return Number.isNaN(d.getTime())?"":d.toISOString().slice(0,10);
+}
+function revenue(r){
+  return num(val(r,[
+    "total penghasilan","penghasilan bersih","total penghasilan bersih",
+    "jumlah dibayar","total pembayaran","harga setelah diskon",
+    "total pesanan","omzet","penjualan","revenue","harga jual"
+  ]));
+}
+function netIncome(r){
+  const direct=val(r,["penghasilan bersih","net income","net proceeds","total penghasilan"]);
+  return direct===""?revenue(r):num(direct);
+}
+function adSpend(r){return num(val(r,["biaya iklan","pengeluaran iklan","belanja iklan","ad spend","spend","cost"]))}
+function adSales(r){return num(val(r,["omzet penjualan","penjualan iklan","gmv langsung","direct gmv","sales","revenue"]))}
+function periodOf(r){
+  const d=dateValue(r);
+  if(d)return d.toISOString().slice(0,7);
+  const s=String(val(r,["periode","period","bulan","month"])||"");
+  const m=s.match(/(20\d{2})[-/](\d{1,2})/);
+  return m?`${m[1]}-${String(m[2]).padStart(2,"0")}`:"";
 }
 
-const released=()=>S.data.income||[];
-const orders=()=>S.data.ordersAll||[];
-const gross=o=>(o.products||[]).reduce((a,p)=>a+(Number(p.harga_setelah_diskon)>0?Number(p.harga_setelah_diskon):Number(p.harga_awal)||0)*(Number(p.quantity)||0),0);
-const excluded=o=>/batal|kembali|return|refund/i.test(o.status_pesanan||"");
-const hppAt=(sku,d)=>{let a=S.hppHist?.[sku]||[];if(a.length){let v=a.filter(x=>!x.from||!d||x.from<=d).at(-1);if(v)return Number(v.value)||0}return Number(S.hpp?.[sku]||0)};
-function calc(){
- const inc=released(), all=orders(), ids=new Set(inc.map(x=>x.order_number)), activeAll=all.filter(x=>!excluded(x)),pending=activeAll.filter(x=>!ids.has(x.order_number));
- const om=inc.reduce((a,x)=>a+Number(x.original_price||0)-Math.abs(Number(x.product_discount||0)),0), net=inc.reduce((a,x)=>a+Number(x.total_income||0),0);
- const po=pending.reduce((a,x)=>a+gross(x),0),rate=om?net/om:0,est=po*rate, total=om+po;
- let hpp=0,qty=0;for(const o of all)for(const p of o.products||[]){let q=Math.max(0,(Number(p.quantity)||0)-(Number(p.returned_quantity)||0));qty+=q;hpp+=hppAt(String(p.sku||"").trim(),o.order_date)*q}
- const ad=[...(S.data.ads||[]),...(S.data.adsProduct||[])].reduce((a,x)=>a+Number(x.ad_spend||0),0),op=(S.opCosts||[]).reduce((a,x)=>a+Number(x.amount||0),0);
- return {om,net,po,est,total,hpp,ad,adReal:ad*1.11,op,profit:net+est-hpp-ad*1.11-op,pending:pending.length,orders:inc.length,qty,coverage:activeAll.length?Math.round(inc.length/activeAll.length*100):100,discount:inc.reduce((a,x)=>a+Math.abs(Number(x.product_discount)||0),0)}
+function openDB(){
+  if(dbPromise)return dbPromise;
+  dbPromise=new Promise((resolve,reject)=>{
+    if(!("indexedDB" in window)){resolve(null);return}
+    const req=indexedDB.open(DB_NAME,1);
+    req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains(DB_STORE))db.createObjectStore(DB_STORE)};
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>resolve(null);
+  });
+  return dbPromise;
 }
-function nav(page){return `<aside class="sidebar"><div class="brand"><div class="brand-mark">↗</div><div><div class="brand-name">Profit<span>Tebel</span></div><div class="brand-lite">LITE</div></div></div><div class="store-wrap"><button class="store-select" id="store">${current().name}</button></div><nav>${NAV.map(x=>`<button class="nav-item ${page===x[0]?"active":""}" data-page="${x[0]}">${x[1]}</button>`).join("")}</nav></aside>`}
-function current(){return stores.find(x=>x.id===active)||stores[0]}
-function metric(a,b,c){return `<div class="metric"><span>${a}</span><b>${b}</b><small>${c}</small></div>`}
-function dashboard(){let t=calc();return `<main class="content"><div class="page-head"><h1>Dashboard Profit</h1><p>1.111 order (+208 est.) · 2026-07-01 → 2026-07-31 · incl. estimasi order yang uangnya belum cair</p></div><div class="metric-grid">${metric("Total Omzet",rp(t.total),`${t.orders.toLocaleString("id-ID")} order cair + ${t.pending} estimasi`)}${metric("Total Diskon & Promo",rp(t.discount),"Voucher, cashback, refund")}${metric("Total Biaya",rp(t.net?Math.max(0,t.total-t.net):0),"biaya marketplace + penyesuaian")}${metric("Income dari Marketplace",rp(t.net),`${(t.net/t.total*100||0).toFixed(1)}% omzet`)}${metric("HPP + Packaging",rp(t.hpp),"Harga pokok + packaging")}${metric("Biaya Iklan",rp(t.adReal),"Ad spend + PPN 11%")}${metric("Biaya Operasional",rp(t.op),"Biaya tercatat")}${metric("Real Profit",rp(t.profit),`${(t.profit/t.total*100||0).toFixed(1)}% dari omzet`)}</div><section class="panel"><div class="panel-title"><h2>Cakupan Data & Estimasi</h2><b>${t.coverage}%</b></div><div class="progress"><span style="width:${t.coverage}%"></span></div><div class="profit-row"><div><span>Order sudah cair</span><b>${t.orders}</b></div><div><span>Order belum cair</span><b>${t.pending}</b></div><div><span>Estimasi income belum cair</span><b>${rp(t.est)}</b></div></div></section><section class="panel"><div class="panel-title"><h2>Data</h2><span>Income ${t.orders} · Order.all ${orders().length} · Produk ${[...new Set(orders().flatMap(o=>(o.products||[]).map(p=>p.sku).filter(Boolean)))].length}</span></div><p class="muted">Mesin perhitungan mengikuti parser sumber Profit Tebel: Income dibaca dari sheet penghasilan yang benar, Order.all dari sheet <b>orders</b>, dan order dideduplikasi berdasarkan No. Pesanan.</p></section></main>`}
-return `<main class="content"><div class="page-head"><h1>Upload Laporan</h1><p>Gabungkan laporan Shopee/TikTok jadi satu dashboard. Semua diproses di browser kamu.</p></div><section class="upload-grid">${box("income","Income (sudah dilepas)",".xlsx,.xls")}${box("orders","Order.all",".xlsx,.xls")}${box("ads","Iklan Keseluruhan",".csv")}${box("adsProduct","Iklan per Produk",".csv")}</section><p class="hint">Data baru digabung, bukan menghapus data lama. Income dan Order.all dedupe berdasarkan No. Pesanan.</p></main>`}
-function box(id,t,a){return `<label class="dropbox" data-upload="${id}"><input hidden type="file" accept="${a}"><div class="box-title">${t}</div><div class="box-sub">Pilih file</div></label>`}
-function products(){let ks=[...new Set(orders().flatMap(o=>(o.products||[]).map(p=>p.sku).filter(Boolean)))];return `<main class="content"><div class="page-head"><h1>Master Produk</h1><p>HPP per SKU dan histori berlaku.</p></div><section class="panel"><table><thead><tr><th>SKU</th><th>Produk</th><th>HPP / unit</th></tr></thead><tbody>${ks.map(k=>{let p=orders().flatMap(o=>o.products||[]).find(x=>x.sku===k)||{};return `<tr><td>${esc(k)}</td><td>${esc(p.product_name||"")}</td><td><input data-hpp="${esc(k)}" value="${hppAt(k,"")}"></td></tr>`}).join("")||"<tr><td colspan=3>Belum ada Order.all.</td></tr>"}</tbody></table><button id="saveHpp" class="primary">Simpan HPP</button></section></main>`}
-function ads(){let a=[...(S.data.ads||[]),...(S.data.adsProduct||[])],sp=a.reduce((x,y)=>x+Number(y.ad_spend||0),0),gm=a.reduce((x,y)=>x+Number(y.gmv||0),0);return `<main class="content"><div class="page-head"><h1>Detail Iklan</h1><p>${a.length} iklan</p></div><div class="metric-grid">${metric("Total Ad Spend",rp(sp),"Net sebelum PPN")}${metric("GMV",rp(gm),"Dari laporan iklan")}${metric("ROAS",sp?(gm/sp).toFixed(2)+"x":"0.00x","GMV ÷ spend")}</div></main>`}
-function roas(){return `<main class="content"><div class="page-head"><h1>Kalkulator ROAS</h1><p>Hitung ROAS target.</p></div><section class="panel"><input id="rs" type="number" placeholder="Penjualan"><input id="rc" type="number" placeholder="Biaya Iklan"><h2 id="rr">0.00x</h2></section></main>`}
-function ops(){return `<main class="content"><div class="page-head"><h1>Biaya Operasional</h1><p>Biaya yang mengurangi Real Profit.</p></div><section class="panel"><input id="on" placeholder="Nama biaya"><input id="oa" type="number" placeholder="Nominal"><button id="addop" class="primary">Tambah</button>${S.opCosts.map((x,i)=>`<p>${esc(x.name)} — ${rp(x.amount)} <button data-del="${i}">Hapus</button></p>`).join("")}</section></main>`}
-function detail(){let r=orders();return `<main class="content"><div class="page-head"><h1>Order.all</h1><p>${r.length} order</p></div><section class="panel"><table><thead><tr><th>No. Pesanan</th><th>Produk</th><th>SKU</th><th>Qty</th><th>Total</th></tr></thead><tbody>${r.slice(0,300).map(o=>`<tr><td>${esc(o.order_number)}</td><td>${esc(o.products?.[0]?.product_name||"")}</td><td>${esc(o.products?.[0]?.sku||"")}</td><td>${(o.products||[]).reduce((a,p)=>a+Math.max(0,(p.quantity||0)-(p.returned_quantity||0)),0)}</td><td>${rp(o.total_pembayaran)}</td></tr>`).join("")}</tbody></table></section></main>`}
-function render(msg=""){let p=location.hash.slice(1)||"dashboard",body=p==="dashboard"?dashboard():p==="upload"?uploadPage():p==="produk"?products():p==="iklan"?ads():p==="roas"?roas():p==="operasional"?ops():detail();document.querySelector("#root").innerHTML=nav(p)+body;bind();if(msg)alert(msg)}
-function bind(){
- document.querySelectorAll(".nav-item").forEach(b=>b.onclick=()=>location.hash=b.dataset.page);
- document.querySelectorAll("[data-upload]").forEach(b=>b.querySelector("input").onchange=async e=>{try{await upload(b.dataset.upload,e.target.files[0])}catch(x){alert(x.message)}});
- document.querySelector("#saveHpp")?.addEventListener("click",async()=>{document.querySelectorAll("[data-hpp]").forEach(x=>{let k=x.dataset.hpp,v=num(x.value);S.hpp[k]=v;S.hppHist[k]=[{from:"",value:v}]});await save();render("HPP disimpan.")});
- document.querySelector("#addop")?.addEventListener("click",async()=>{let n=document.querySelector("#on").value.trim(),a=num(document.querySelector("#oa").value);if(n&&a){S.opCosts.push({name:n,amount:a,id:crypto.randomUUID()});await save();render()}});
- document.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{S.opCosts.splice(+b.dataset.del,1);await save();render()});
- document.querySelector("#rs")?.addEventListener("input",calcRoas);document.querySelector("#rc")?.addEventListener("input",calcRoas)
+async function dbGet(key){
+  const db=await openDB();
+  if(!db)return JSON.parse(localStorage.getItem(key)||"null");
+  return new Promise(resolve=>{
+    const tx=db.transaction(DB_STORE,"readonly"), q=tx.objectStore(DB_STORE).get(key);
+    q.onsuccess=()=>resolve(q.result??null); q.onerror=()=>resolve(null);
+  });
 }
-function calcRoas(){let s=num(document.querySelector("#rs")?.value),c=num(document.querySelector("#rc")?.value);document.querySelector("#rr").textContent=(c?s/c:0).toFixed(2)+"x"}
+async function dbSet(key,value){
+  localStorage.setItem(key,JSON.stringify(value));
+  const db=await openDB();
+  if(!db)return;
+  await new Promise(resolve=>{
+    const tx=db.transaction(DB_STORE,"readwrite");tx.objectStore(DB_STORE).put(value,key);tx.oncomplete=resolve;tx.onerror=resolve;
+  });
+}
+function storeKey(){return `${PREFIX}data_${activeStoreId}`}
+async function save(){
+  await dbSet(storeKey(),S);
+  await dbSet(STORE_KEY,stores);
+  await dbSet(ACTIVE_KEY,activeStoreId);
+}
+let stores=[{id:"default",name:"Toko Utama",marketplace:"shopee"}];
+
+async function loadAll(){
+  const ss=await dbGet(STORE_KEY); if(Array.isArray(ss)&&ss.length)stores=ss;
+  const a=await dbGet(ACTIVE_KEY); if(a)activeStoreId=a;
+  if(!stores.some(x=>x.id===activeStoreId))activeStoreId=stores[0]?.id||"default";
+  const old=await dbGet(storeKey());
+  if(old){
+    S={...blank(),...old,data:{...emptyData(),...(old.data||{})},files:old.files||{}};
+  }else{
+    S=blank();
+    await save();
+  }
+}
+
+function currentStore(){return stores.find(x=>x.id===activeStoreId)||stores[0]}
+
+function nav(active){
+  return `<aside class="sidebar"><div class="brand"><div class="brand-mark">↗</div><div><div class="brand-name">Profit<span>Tebel</span></div><div class="brand-lite">LITE</div></div></div>
+  <div class="store-wrap"><button class="store-select" id="storeSelect">${I.shop}<span>${esc(currentStore()?.name||"Toko Utama")}</span><span class="arrow">${I.chev}</span></button></div>
+  <nav>${NAV.map(x=>`<button class="nav-item ${active===x[0]?"active":""}" data-page="${x[0]}">${I[x[2]]}<span>${x[1]}</span></button>`).join("")}</nav></aside>`
+}
+function head(title,sub){return `<div class="page-head"><h1>${title}</h1><p>${sub}</p></div>`}
+function card(label,value,sub=""){return `<div class="metric"><span>${label}</span><b>${value}</b><small>${sub}</small></div>`}
+
+function mergeBy(rows,newRows,keyFn){
+  const m=new Map();
+  for(const r of rows||[]){const k=keyFn(r)||JSON.stringify(r);m.set(k,r)}
+  for(const r of newRows||[]){const k=keyFn(r)||JSON.stringify(r);m.set(k,r)}
+  return [...m.values()];
+}
+function mergeIncome(oldRows,newRows){
+  return mergeBy(oldRows,newRows,orderId);
+}
+function mergeOrders(oldRows,newRows){
+  return mergeBy(oldRows,newRows,orderId);
+}
+function mergeOrderProducts(oldRows,newRows){
+  return mergeBy(oldRows,newRows,r=>{
+    const o=orderId(r),p=marketplaceProductId(r)||sku(r)||productName(r);
+    return o&&p?`${o}|${p}`:"";
+  });
+}
+function mergeAds(oldRows,newRows){
+  return mergeBy(oldRows,newRows,r=>{
+    const p=periodOf(r),s=sku(r)||marketplaceProductId(r)||productName(r);
+    return p&&s?`${p}|${s}`:JSON.stringify(r);
+  });
+}
+
+async function readFile(file){
+  const wb=XLSX.read(await file.arrayBuffer(),{type:"array",cellDates:true});
+  let rows=[];
+  for(const sn of wb.SheetNames){
+    const ws=wb.Sheets[sn];
+    rows.push(...XLSX.utils.sheet_to_json(ws,{defval:""}));
+  }
+  return rows;
+}
+
+function normalizeOrderRows(rows){
+  return rows.map(r=>({...r,
+    __order_number:orderId(r),
+    __sku:sku(r),
+    __product:productName(r),
+    __variation:variation(r),
+    __qty:qty(r),
+    __returned_qty:returnedQty(r),
+    __date:dateKey(dateValue(r))
+  }));
+}
+
+function rebuildProducts(){
+  const all=[...(S.data.orders||[]),...(S.data.orderProducts||[])];
+  for(const r of all){
+    const k=sku(r)||marketplaceProductId(r);
+    if(!k)continue;
+    S.hppMeta[k]??={sku:k,product:productName(r),variation:variation(r)};
+    if(!S.skuStore[k])S.skuStore[k]=activeStoreId;
+  }
+}
+
+function hppFor(k,orderDate){
+  if(!k)return 0;
+  const hist=(S.hppHistory||[]).filter(x=>String(x.sku||"")===String(k));
+  const d=orderDate?new Date(orderDate):null;
+  const valid=hist.filter(x=>!d||!x.from||new Date(x.from)<=d).sort((a,b)=>new Date(a.from||0)-new Date(b.from||0));
+  if(valid.length)return num(valid.at(-1).hpp);
+  const direct=(S.hpp||[]).find(x=>String(x.sku||"")===String(k));
+  return num(direct?.hpp);
+}
+
+function effectiveQty(r){return Math.max(0,qty(r)-returnedQty(r))}
+function buildOrderProducts(){
+  const rows=S.data.orderProducts?.length?S.data.orderProducts:S.data.orders;
+  return rows;
+}
+
+function totals(){
+  const income=S.data.income||[], orders=S.data.orders||[];
+  const omzet=income.reduce((a,r)=>a+revenue(r),0);
+  const incomeNet=income.reduce((a,r)=>a+netIncome(r),0);
+  const pesanan=new Set([...income,...orders].map(orderId).filter(Boolean)).size;
+  const qtySold=orders.reduce((a,r)=>a+effectiveQty(r),0);
+  const iklan=(S.data.ads||[]).reduce((a,r)=>a+adSpend(r),0)+(S.data.adsProduct||[]).reduce((a,r)=>a+adSpend(r),0);
+  const iklanRiil=iklan*1.11;
+  const ops=(S.opCosts||[]).reduce((a,r)=>a+num(r.amount),0);
+  let hpp=0;
+  for(const r of buildOrderProducts()){
+    const k=sku(r)||marketplaceProductId(r);
+    hpp+=hppFor(k,dateValue(r))*effectiveQty(r);
+  }
+  const profit=incomeNet-hpp-iklanRiil-ops;
+  return {omzet,incomeNet,pesanan,qtySold,iklan,iklanRiil,ops,hpp,profit};
+}
+
+function dashboard(){
+  const t=totals();
+  return `<main class="content">${head("Dashboard Profit","Ringkasan performa toko berdasarkan laporan yang sudah di-upload.")}
+  <div class="metric-grid">${card("Omzet",money(t.omzet),"dari Income")}${card("Pesanan",t.pesanan.toLocaleString("id-ID"),"order unik")}${card("Produk Terjual",t.qtySold.toLocaleString("id-ID"),"qty bersih retur")}${card("HPP",money(t.hpp),"berdasarkan SKU + histori")}${card("Biaya Iklan",money(t.iklanRiil),"termasuk PPN 11%")}${card("Biaya Operasional",money(t.ops),"biaya tercatat")}${card("Real Profit",money(t.profit),"income net − biaya")}${card("Margin Profit",t.incomeNet?(t.profit/t.incomeNet*100).toFixed(2)+"%":"0%","profit ÷ income")}</div>
+  <section class="panel"><div class="panel-title"><h2>Ringkasan Profit</h2><span>Data toko aktif</span></div><div class="profit-row"><div><span>Income Bersih</span><b>${money(t.incomeNet)}</b></div><div><span>Total biaya</span><b>${money(t.hpp+t.iklanRiil+t.ops)}</b></div><div><span>Real Profit</span><b class="${t.profit>=0?"positive":"negative"}">${money(t.profit)}</b></div></div></section>
+  <section class="panel"><div class="panel-title"><h2>Data</h2><span>Income ${S.data.income.length} · Order.all ${S.data.orders.length} · Iklan ${S.data.ads.length+S.data.adsProduct.length}</span></div>
+  <div class="table-wrap"><table><thead><tr><th>Jenis</th><th>Jumlah</th><th>Status</th></tr></thead><tbody>
+  <tr><td>Income</td><td>${S.data.income.length.toLocaleString("id-ID")}</td><td>tersimpan</td></tr>
+  <tr><td>Order.all</td><td>${S.data.orders.length.toLocaleString("id-ID")}</td><td>tersimpan</td></tr>
+  <tr><td>Order Produk</td><td>${S.data.orderProducts.length.toLocaleString("id-ID")}</td><td>tersimpan</td></tr>
+  <tr><td>HPP History</td><td>${S.hppHistory.length.toLocaleString("id-ID")}</td><td>tersimpan</td></tr>
+  </tbody></table></div></section></main>`
+}
+
+function uploadBox(id){
+  const t=TYPES[id],f=S.files[id];
+  return `<label class="dropbox ${f?"uploaded":""}" data-upload="${id}"><input hidden type="file" accept="${t.accept}"><div class="box-icon">${I[t.icon]}</div><div><div class="box-title">${t.title}</div><div class="box-sub">${f?`${esc(f.name)} • ${f.rows.toLocaleString("id-ID")} baris`:t.ext}</div></div></label>`
+}
+function uploadPage(msg=""){
+  return `<main class="content">${msg?`<div class="notice">${I.check}<span>${esc(msg)}</span></div>`:""}${head("Upload Laporan","Gabungkan laporan Shopee/TikTok jadi satu dashboard. Semua diproses di browser kamu.")}
+  <section class="store-card"><div class="store-label">${I.shop}<strong>Upload ke toko:</strong><span class="pill">${esc(currentStore()?.name||"Toko Utama")} (${esc(currentStore()?.marketplace||"shopee")})</span></div>
+  <div class="new-store"><input id="newStoreName" placeholder="Nama toko baru"><div><select id="newStoreMarket"><option>Shopee</option><option>TikTok</option></select><button id="addStore">＋ Tambah</button></div></div></section>
+  <section class="upload-grid">${uploadBox("income")}${uploadBox("orders")}${uploadBox("ads")}${uploadBox("adsProduct")}</section>
+  <div class="hint">💡 File baru otomatis digabung. Income/Order.all dedupe berdasarkan No. Pesanan. Upload ulang tidak menggandakan transaksi. <a href="#" id="reset">Reset data</a></div>
+  <div class="privacy">◉ Semua perhitungan dan penyimpanan terjadi di perangkat kamu.</div></main>`
+}
+
+function products(){
+  rebuildProducts();
+  const keys=[...new Set([...Object.keys(S.hppMeta||{}),...(S.data.orders||[]).map(r=>sku(r)||marketplaceProductId(r)).filter(Boolean)])];
+  return `<main class="content">${head("Master Produk","Kelola SKU dan HPP historis untuk perhitungan profit.")}<section class="panel"><div class="toolbar"><input id="prodSearch" placeholder="Cari SKU/produk..."><button class="primary" id="saveProducts">Simpan HPP</button></div>
+  <div class="table-wrap"><table><thead><tr><th>SKU</th><th>Produk</th><th>Variasi</th><th>HPP Saat Ini</th></tr></thead><tbody>
+  ${keys.map(k=>{const m=S.hppMeta[k]||{},h=hppFor(k,new Date());return `<tr><td>${esc(k)}</td><td>${esc(m.product||"")}</td><td>${esc(m.variation||"")}</td><td><input class="cell" data-hpp="${esc(k)}" value="${h||""}" placeholder="0"></td></tr>`}).join("")||`<tr><td colspan="4" class="empty">Upload Order.all terlebih dahulu.</td></tr>`}
+  </tbody></table></div></section></main>`
+}
+
+function ads(){
+  const rows=[...(S.data.ads||[]),...(S.data.adsProduct||[])];
+  const spend=rows.reduce((a,r)=>a+adSpend(r),0),sales=rows.reduce((a,r)=>a+adSales(r),0);
+  return `<main class="content">${head("Detail Iklan","Detail biaya dan performa iklan dari laporan yang sudah di-upload.")}<div class="metric-grid">${card("Belanja Iklan",money(spend),"sebelum PPN")}${card("Penjualan Iklan",money(sales),"GMV/penjualan iklan")}${card("ROAS",spend?(sales/spend).toFixed(2)+"x":"0.00x","penjualan ÷ ad spend")}</div>
+  <section class="panel"><div class="panel-title"><h2>Data Iklan</h2><span>${rows.length.toLocaleString("id-ID")} baris</span></div><div class="table-wrap"><table><thead><tr><th>Periode</th><th>Produk</th><th>Biaya</th><th>Penjualan</th><th>ROAS</th></tr></thead><tbody>
+  ${rows.slice(0,150).map(r=>{const s=adSpend(r),g=adSales(r);return `<tr><td>${esc(periodOf(r)||"—")}</td><td>${esc(productName(r)||val(r,["nama"])||sku(r)||"—")}</td><td>${money(s)}</td><td>${money(g)}</td><td>${s?(g/s).toFixed(2)+"x":"—"}</td></tr>`}).join("")||`<tr><td colspan="5" class="empty">Belum ada laporan iklan.</td></tr>`}
+  </tbody></table></div></section></main>`
+}
+
+function roas(){
+  return `<main class="content">${head("Kalkulator ROAS","Hitung target ROAS dan estimasi hasil iklan.")}<section class="panel calc"><label>Omzet dari iklan<input id="rSales" type="number" placeholder="1000000"></label><label>Biaya iklan<input id="rSpend" type="number" placeholder="200000"></label><div class="calc-result"><span>ROAS</span><b id="rResult">0.00x</b></div></section></main>`
+}
+function ops(){
+  return `<main class="content">${head("Biaya Operasional","Catat biaya operasional yang akan mengurangi profit.")}<section class="panel"><div class="toolbar"><input id="opName" placeholder="Nama biaya"><input id="opAmount" type="number" placeholder="Nominal"><button class="primary" id="addOp">＋ Tambah</button></div><div class="table-wrap"><table><thead><tr><th>Biaya</th><th>Nominal</th><th></th></tr></thead><tbody>${S.opCosts.map((x,i)=>`<tr><td>${esc(x.name)}</td><td>${money(x.amount)}</td><td><button class="danger" data-del="${i}">Hapus</button></td></tr>`).join("")||`<tr><td colspan="3" class="empty">Belum ada biaya operasional.</td></tr>`}</tbody></table></div></section></main>`
+}
+
+function detail(){
+  const rows=S.data.orders||[];
+  return `<main class="content">${head("Detail Iklan","Detail transaksi/order yang tersedia dari laporan.")}<section class="panel"><div class="panel-title"><h2>Order.all</h2><span>${rows.length.toLocaleString("id-ID")} baris</span></div><div class="table-wrap"><table><thead><tr><th>No. Pesanan</th><th>SKU</th><th>Produk</th><th>Qty Bersih</th><th>Nilai</th></tr></thead><tbody>${rows.slice(0,200).map(r=>`<tr><td>${esc(orderId(r)||"—")}</td><td>${esc(sku(r)||"—")}</td><td>${esc(productName(r)||"—")}</td><td>${effectiveQty(r)}</td><td>${money(revenue(r))}</td></tr>`).join("")||`<tr><td colspan="5" class="empty">Belum ada Order.all.</td></tr>`}</tbody></table></div></section></main>`
+}
+
+async function upload(id,file){
+  const rows=await readFile(file);
+  if(!rows.length)throw Error("Tidak ada data");
+  const normalized=normalizeOrderRows(rows);
+  if(id==="income")S.data.income=mergeIncome(S.data.income,normalized);
+  else if(id==="orders"){
+    S.data.orders=mergeOrders(S.data.orders,normalized);
+    S.data.orderProducts=mergeOrderProducts(S.data.orderProducts,normalized);
+  }else if(id==="ads")S.data.ads=mergeAds(S.data.ads,normalized);
+  else if(id==="adsProduct")S.data.adsProduct=mergeAds(S.data.adsProduct,normalized);
+  S.files[id]={name:file.name,rows:rows.length,updatedAt:new Date().toISOString()};
+  rebuildProducts();
+  await save();
+  render(`Berhasil: ${file.name} — ${rows.length.toLocaleString("id-ID")} baris dibaca. Data lama tetap dipertahankan dan data transaksi dideduplikasi.`);
+}
+
+async function addStore(){
+  const name=document.querySelector("#newStoreName")?.value.trim();
+  const market=document.querySelector("#newStoreMarket")?.value.toLowerCase()||"shopee";
+  if(!name)return;
+  const id="store_"+Date.now();
+  stores.push({id,name,marketplace:market});
+  activeStoreId=id;S=blank();
+  await save();render(`Toko ${name} berhasil dibuat.`);
+}
+
+async function switchStore(){
+  const names=stores.map((s,i)=>`${i+1}. ${s.name} (${s.marketplace})`).join("\n");
+  const answer=prompt(`Pilih toko:\n${names}\n\nMasukkan nomor:`);
+  const n=Number(answer);
+  if(!Number.isInteger(n)||!stores[n-1])return;
+  activeStoreId=stores[n-1].id;
+  const old=await dbGet(storeKey());
+  S=old?{...blank(),...old,data:{...emptyData(),...(old.data||{})}}:blank();
+  await save();render();
+}
+
+async function resetAll(){
+  if(!confirm("Hapus semua data toko aktif?"))return;
+  S=blank();await save();render("Data toko aktif berhasil direset.");
+}
+
+function bind(p){
+  document.querySelectorAll(".nav-item").forEach(b=>b.onclick=()=>location.hash=b.dataset.page);
+  document.querySelector("#storeSelect")?.addEventListener("click",switchStore);
+  document.querySelector("#addStore")?.addEventListener("click",addStore);
+  document.querySelectorAll("[data-upload]").forEach(box=>{
+    const inp=box.querySelector("input");
+    box.onclick=e=>{if(e.target!==inp)inp.click()};
+    inp.onchange=async()=>{
+      const f=inp.files[0];if(!f)return;
+      try{await upload(box.dataset.upload,f)}catch(e){render("File gagal dibaca: "+e.message)}
+    };
+  });
+  document.querySelector("#reset")?.addEventListener("click",e=>{e.preventDefault();resetAll()});
+  document.querySelector("#saveProducts")?.addEventListener("click",async()=>{
+    document.querySelectorAll("[data-hpp]").forEach(x=>{
+      const k=x.dataset.hpp;
+      const h=num(x.value);
+      S.hppMeta[k]??={sku:k};
+      const from=dateKey(new Date());
+      S.hppHistory=(S.hppHistory||[]).filter(z=>!(String(z.sku)===String(k)&&String(z.from)===from));
+      S.hppHistory.push({sku:k,hpp:h,from});
+      S.hpp=(S.hpp||[]).filter(z=>String(z.sku)!==String(k));
+      S.hpp.push({sku:k,hpp:h});
+    });
+    await save();render("Master Produk dan HPP berhasil disimpan.");
+  });
+  document.querySelector("#addOp")?.addEventListener("click",async()=>{
+    const n=document.querySelector("#opName").value.trim(),a=num(document.querySelector("#opAmount").value);
+    if(n&&a){S.opCosts.push({name:n,amount:a,createdAt:new Date().toISOString()});await save();render("Biaya operasional ditambahkan.")}
+  });
+  document.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{S.opCosts.splice(Number(b.dataset.del),1);await save();render()});
+  if(p==="roas"){
+    const a=document.querySelector("#rSales"),b=document.querySelector("#rSpend"),o=document.querySelector("#rResult");
+    const f=()=>o.textContent=(num(b.value)?(num(a.value)/num(b.value)).toFixed(2):"0.00")+"x";
+    a.oninput=f;b.oninput=f;
+  }
+}
+
+function render(msg=""){
+  const p=location.hash.slice(1)||"dashboard";
+  let body=p==="dashboard"?dashboard():p==="upload"?uploadPage(msg):p==="produk"?products():p==="iklan"?ads():p==="roas"?roas():p==="operasional"?ops():detail();
+  document.querySelector("#root").innerHTML=nav(p)+body;
+  bind(p);
+}
 addEventListener("hashchange",()=>render());
-(async()=>{await load();render()})();
+
+(async()=>{await loadAll();render()})();
