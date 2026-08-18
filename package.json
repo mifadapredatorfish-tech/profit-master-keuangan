@@ -1,7 +1,7 @@
 {
   "name": "profit-master-keuangan-screenshot-clone",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "scripts": {
-    "build": "echo static-build"
+    "build": "mkdir -p dist && cp index.html main.js style.css dist/"
   }
 }
