@@ -1,2 +1,3 @@
-# Profit Master Keuangan v2
-Full local dashboard: upload, dashboard profit, master produk, iklan, ROAS, biaya operasional.
+# ProfitTebel Lite — Screenshot Clone
+
+UI clone based on the screenshots supplied in the conversation.
