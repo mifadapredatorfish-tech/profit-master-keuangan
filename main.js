@@ -10,7 +10,7 @@ const nav=[
 ['upload','Upload Data','M12 16V4M7 9l5-5 5 5M5 14v5h14v-5']
 ];
 
-const state={page:'dashboard', orders:1111, products:1442, omzet:67446057, diskon:65000, biaya:12612000, income:48500000, hpp:17600000, ads:10100000, ops:0, profit:20835298};
+const state={page:'dashboard',orders:0,products:0,omzet:0,diskon:0,biaya:0,income:0,hpp:0,ads:0,ops:0,profit:0,uploaded:{income:false,orders:false,ads:false,adsProduct:false,master:false}};
 
 function sidebar(){
  return `<aside class="sidebar"><div class="brand"><div class="brand-mark">↗</div><div><div class="brand-name">Profit<span>Tebel</span></div><div class="brand-lite">LITE</div></div></div>
@@ -37,16 +37,16 @@ function dashboard(){
 }
 function flow(){
  return `<section class="panel"><div class="panel-head"><h2>ℹ️ Alur Dana: Omzet → Real Profit</h2><p>Rincian semua pengurangan dari omzet kotor sampai profit bersih</p></div><div class="flow">
- ${line('Nilai Semua Order',rupiah(67446057),'100.0%')}
- ${line('Disisihkan dulu: order belum cair',rupiah(13053285),'19.4%')}
- ${line('Omzet yang Uangnya Sudah Cair',rupiah(54392772),'80.6%')}
- ${line('Diskon & Promo yang Kamu Tanggung',rupiah(65000),'0.1%')}
- ${line('Subtotal setelah Diskon',rupiah(54327772),'80.5%')}
- ${line('Biaya Marketplace (Shopee)',rupiah(10134167),'15.0%')}
- ${line('Income dari Marketplace',rupiah(39099510),'58.0%')}
- ${line('HPP + Packaging',rupiah(14203000),'21.1%')}
- ${line('Biaya Iklan + termasuk PPN 11%',rupiah(10081390),'14.9%')}
- ${line('Real Profit',rupiah(20835298),'30.9%')}
+ ${line('Nilai Semua Order',rupiah(state.omzet),'0.0%')}
+ ${line('Disisihkan dulu: order belum cair',rupiah(0),'0.0%')}
+ ${line('Omzet yang Uangnya Sudah Cair',rupiah(0),'0.0%')}
+ ${line('Diskon & Promo yang Kamu Tanggung',rupiah(state.diskon),'0.0%')}
+ ${line('Subtotal setelah Diskon',rupiah(Math.max(0,state.omzet-state.diskon)),'0.0%')}
+ ${line('Biaya Marketplace (Shopee)',rupiah(state.biaya),'0.0%')}
+ ${line('Income dari Marketplace',rupiah(state.income),'0.0%')}
+ ${line('HPP + Packaging',rupiah(state.hpp),'0.0%')}
+ ${line('Biaya Iklan + termasuk PPN 11%',rupiah(state.ads),'0.0%')}
+ ${line('Real Profit',rupiah(state.profit),'0.0%')}
  </div></section>`
 }
 function sources(){
@@ -75,18 +75,61 @@ function orders(){
 }
 function upload(){
  return `<main class="content">${head('Upload Laporan','Gabungkan laporan Shopee / TikTok jadi satu dashboard. Semua diproses di browser kamu.')}
- <section class="upload-grid">${[['Income (sudah dilepas)','income','.xlsx,.xls'],['Order.all','orders','.xlsx,.xls'],['Iklan Keseluruhan','ads','.csv'],['Iklan per Produk','adsProduct','.csv']].map(x=>`<label class="upload-box"><input hidden type="file" accept="${x[2]}" data-type="${x[1]}"><div>⇧</div><b>${x[0]}</b><span>Pilih file</span></label>`).join('')}</section>
- <p class="footer-note">💡 Bisa upload beberapa periode — file baru otomatis digabung. Data diproses di browser kamu.</p>
- <section class="panel"><div class="panel-head"><h2>Data tersimpan</h2><p>Income 3.722 · Order.all 1.264 · Iklan 110</p></div><div class="flow">${line('Income','3.722 baris','tersimpan')}${line('Order.all','1.264 baris','tersimpan')}${line('Order Produk','1.373 baris','tersimpan')}${line('HPP History','102 produk','tersimpan')}</div></section></main>`
+ <section class="upload-grid">${[
+ ['Income (sudah dilepas)','income','.xlsx,.xls,.csv'],
+ ['Order.all','orders','.xlsx,.xls,.csv'],
+ ['Iklan Keseluruhan','ads','.csv,.xlsx,.xls'],
+ ['Iklan per Produk','adsProduct','.csv,.xlsx,.xls'],
+ ['Master Produk / HPP','master','.xlsx,.xls,.csv']
+ ].map(x=>`<label class="upload-box"><input hidden type="file" accept="${x[2]}" data-type="${x[1]}"><div>⇧</div><b>${x[0]}</b><span>${state.uploaded[x[1]]?'File sudah dimuat':'Pilih file'}</span></label>`).join('')}</section>
+ <p class="footer-note">💡 Belum ada data? Dashboard akan tetap kosong sampai file di-upload.</p>
+ <section class="panel"><div class="panel-head"><h2>Data tersimpan</h2><p>Hanya file yang benar-benar di-upload yang dihitung.</p></div>
+ <div class="flow">
+ ${line('Income',state.uploaded.income?'Sudah dimuat':'Belum di-upload','')}
+ ${line('Order.all',state.uploaded.orders?'Sudah dimuat':'Belum di-upload','')}
+ ${line('Iklan',state.uploaded.ads||state.uploaded.adsProduct?'Sudah dimuat':'Belum di-upload','')}
+ ${line('Master Produk / HPP',state.uploaded.master?'Sudah dimuat':'Belum di-upload','')}
+ </div></section></main>`
 }
 function generic(title,sub){return `<main class="content">${head(title,sub)}<section class="panel"><div class="empty">Halaman ${title} siap digunakan.</div></section></main>`}
 function head(t,s){return `<div class="page-head"><h1>${t}</h1><p>${s}</p></div>`}
 function card(l,v,s,c){return `<div class="metric ${c||''}"><span>${l}</span><b>${v}</b><small>${s}</small></div>`}
 function line(a,b,c){return `<div class="line"><span>${a}</span><span class="value">${b} <small>${c||''}</small></span></div>`}
 
+function handleUpload(input){
+ const type=input.dataset.type, file=input.files?.[0];
+ if(!file)return;
+ state.uploaded[type]=true;
+
+ // Keep the UI empty until actual data is parsed; parse common CSV files here.
+ if(file.name.toLowerCase().endsWith('.csv')){
+   const reader=new FileReader();
+   reader.onload=()=>{ parseUploadedText(String(reader.result||''),type); };
+   reader.readAsText(file);
+ }else{
+   // XLS/XLSX parsing requires the XLSX dependency; this screenshot clone
+   // intentionally marks the file as loaded and leaves the source data intact.
+   render();
+ }
+}
+function parseUploadedText(text,type){
+ const rows=text.split(/\r?\n/).filter(Boolean);
+ const cells=rows.map(r=>r.split(','));
+ if(type==='ads'||type==='adsProduct'){
+   let spend=0;
+   for(let i=1;i<cells.length;i++){
+     const nums=cells[i].map(x=>Number(String(x).replace(/[^\d.-]/g,''))||0);
+     spend+=Math.max(...nums,0);
+   }
+   state.ads=spend;
+ }
+ render();
+}
+
 function render(){
  let body=state.page==='dashboard'?dashboard():state.page==='produk'?products():state.page==='iklan'?generic('Detail Iklan','Rincian biaya iklan keseluruhan dan per produk.'):state.page==='roas'?generic('Kalkulator ROAS','Simulasi target ROAS dan biaya iklan.'):state.page==='operasional'?generic('Biaya Operasional','Catat biaya operasional toko.'):state.page==='upload'?upload():orders();
  document.getElementById('app').innerHTML=`<div class="app">${sidebar()}${body}</div>`;
  document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>{state.page=b.dataset.page;render()});
+ document.querySelectorAll('input[data-type]').forEach(i=>i.onchange=()=>handleUpload(i));
 }
 render();
